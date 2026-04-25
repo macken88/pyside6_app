@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QTimer, Qt, QUrl
+from PySide6.QtCore import QFileSystemWatcher, QSettings, QTimer, Qt, QUrl
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -30,6 +30,9 @@ from PySide6.QtWidgets import (
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".m4v"}
+SETTINGS_ORGANIZATION = "VideoAnalyzer"
+SETTINGS_APPLICATION = "VideoAnalyzer"
+SETTINGS_WATCH_FOLDER_KEY = "watch_folder"
 RESULT_COLUMNS = [
     "No.",
     "検出日時",
@@ -130,6 +133,8 @@ class MainWindow(QMainWindow):
         self.watch_folder: Path | None = None
         self.known_files: dict[Path, float] = {}
         self.video_window: VideoWindow | None = None
+        self.is_monitoring = False
+        self.settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
 
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(self._handle_directory_changed)
@@ -142,6 +147,7 @@ class MainWindow(QMainWindow):
         status_bar = QStatusBar(self)
         status_bar.showMessage("監視フォルダを選択してください")
         self.setStatusBar(status_bar)
+        self._restore_watch_folder()
 
     def _build_actions(self) -> None:
         self.choose_folder_action = QAction("監視フォルダを選択", self)
@@ -149,6 +155,9 @@ class MainWindow(QMainWindow):
 
         self.scan_action = QAction("再スキャン", self)
         self.scan_action.triggered.connect(self.scan_watch_folder)
+
+        self.toggle_watch_action = QAction("監視開始", self)
+        self.toggle_watch_action.triggered.connect(self.toggle_monitoring)
 
         self.copy_action = QAction("結果をコピー", self)
         self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
@@ -163,6 +172,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("ファイル")
         file_menu.addAction(self.choose_folder_action)
+        file_menu.addAction(self.toggle_watch_action)
         file_menu.addAction(self.scan_action)
 
         result_menu = self.menuBar().addMenu("結果")
@@ -181,10 +191,14 @@ class MainWindow(QMainWindow):
         scan_button = QPushButton("再スキャン")
         scan_button.clicked.connect(self.scan_watch_folder)
 
+        self.toggle_watch_button = QPushButton("監視開始")
+        self.toggle_watch_button.clicked.connect(self.toggle_monitoring)
+
         folder_row = QHBoxLayout()
         folder_row.addWidget(QLabel("監視フォルダ"))
         folder_row.addWidget(self.folder_path_input, stretch=1)
         folder_row.addWidget(choose_button)
+        folder_row.addWidget(self.toggle_watch_button)
         folder_row.addWidget(scan_button)
 
         self.result_table = QTableWidget(0, len(RESULT_COLUMNS))
@@ -214,8 +228,8 @@ class MainWindow(QMainWindow):
         results_panel = QWidget()
         results_layout = QVBoxLayout()
         results_layout.addWidget(QLabel("解析結果"))
-        results_layout.addWidget(self.result_table, stretch=1)
         results_layout.addLayout(table_actions)
+        results_layout.addWidget(self.result_table, stretch=1)
         results_panel.setLayout(results_layout)
 
         self.selected_file_label = QLabel("未選択")
@@ -270,16 +284,15 @@ class MainWindow(QMainWindow):
 
         self.set_watch_folder(Path(folder))
 
-    def set_watch_folder(self, folder: Path) -> None:
-        if self.watcher.directories():
-            self.watcher.removePaths(self.watcher.directories())
-
+    def set_watch_folder(self, folder: Path, *, start_monitoring: bool = True) -> None:
         self.watch_folder = folder
         self.folder_path_input.setText(str(folder))
-        self.watcher.addPath(str(folder))
-        self.watch_status_label.setText("監視中")
-        self.statusBar().showMessage(f"監視中: {folder}")
-        self.scan_watch_folder()
+        self.settings.setValue(SETTINGS_WATCH_FOLDER_KEY, str(folder))
+
+        if start_monitoring:
+            self.start_monitoring()
+        else:
+            self.stop_monitoring()
 
     def scan_watch_folder(self) -> None:
         if self.watch_folder is None:
@@ -293,8 +306,71 @@ class MainWindow(QMainWindow):
         self._update_counts()
 
     def _handle_directory_changed(self, _folder: str) -> None:
+        if not self.is_monitoring:
+            return
+
         self.statusBar().showMessage("フォルダ更新を検出しました。確認中...")
         QTimer.singleShot(500, self.scan_watch_folder)
+
+    def toggle_monitoring(self) -> None:
+        if self.is_monitoring:
+            self.stop_monitoring()
+        else:
+            self.start_monitoring()
+
+    def start_monitoring(self) -> None:
+        if self.watch_folder is None:
+            QMessageBox.information(self, "監視フォルダ未設定", "先に監視フォルダを選択してください。")
+            return
+
+        if not self.watch_folder.is_dir():
+            QMessageBox.warning(self, "監視フォルダなし", f"監視フォルダが存在しません:\n{self.watch_folder}")
+            return
+
+        if self.watcher.directories():
+            self.watcher.removePaths(self.watcher.directories())
+
+        self.watcher.addPath(str(self.watch_folder))
+        self.is_monitoring = True
+        self._update_monitoring_controls()
+        self.statusBar().showMessage(f"監視中: {self.watch_folder}")
+        self.scan_watch_folder()
+
+    def stop_monitoring(self) -> None:
+        if self.watcher.directories():
+            self.watcher.removePaths(self.watcher.directories())
+
+        self.is_monitoring = False
+        self._update_monitoring_controls()
+        if self.watch_folder is None:
+            self.statusBar().showMessage("監視フォルダを選択してください")
+        else:
+            self.statusBar().showMessage(f"監視停止中: {self.watch_folder}")
+
+    def _update_monitoring_controls(self) -> None:
+        if self.is_monitoring:
+            self.watch_status_label.setText("監視中")
+            self.toggle_watch_action.setText("監視停止")
+            self.toggle_watch_button.setText("監視停止")
+            return
+
+        self.watch_status_label.setText("停止中" if self.watch_folder else "未開始")
+        self.toggle_watch_action.setText("監視開始")
+        self.toggle_watch_button.setText("監視開始")
+
+    def _restore_watch_folder(self) -> None:
+        saved_folder = self.settings.value(SETTINGS_WATCH_FOLDER_KEY, "", str)
+        if not saved_folder:
+            self._update_monitoring_controls()
+            return
+
+        folder = Path(saved_folder)
+        if not folder.is_dir():
+            self._update_monitoring_controls()
+            self.statusBar().showMessage(f"前回の監視フォルダが見つかりません: {folder}")
+            return
+
+        self.set_watch_folder(folder, start_monitoring=False)
 
     def _upsert_video_result(self, video_path: Path) -> None:
         modified_at = video_path.stat().st_mtime
@@ -414,6 +490,12 @@ class MainWindow(QMainWindow):
     def _update_counts(self) -> None:
         self.detected_count_label.setText(str(self.result_table.rowCount()))
         self.statusBar().showMessage(f"{self.result_table.rowCount()} 件の動画を検出済み")
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        if self.video_window is not None:
+            self.video_window.close()
+
+        super().closeEvent(event)
 
 
 def main() -> int:
