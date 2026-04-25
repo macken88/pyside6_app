@@ -1,0 +1,2 @@
+"""Video analysis desktop app."""
+
