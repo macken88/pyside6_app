@@ -154,6 +154,9 @@ class MainWindow(QMainWindow):
         self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
         self.copy_action.triggered.connect(self.copy_results_to_clipboard)
 
+        self.clear_results_action = QAction("結果をクリア", self)
+        self.clear_results_action.triggered.connect(self.clear_results)
+
         self.open_video_action = QAction("動画を別ウィンドウで開く", self)
         self.open_video_action.triggered.connect(self.open_selected_video)
 
@@ -164,6 +167,7 @@ class MainWindow(QMainWindow):
 
         result_menu = self.menuBar().addMenu("結果")
         result_menu.addAction(self.copy_action)
+        result_menu.addAction(self.clear_results_action)
         result_menu.addAction(self.open_video_action)
 
     def _build_ui(self) -> None:
@@ -195,11 +199,15 @@ class MainWindow(QMainWindow):
         copy_button = QPushButton("結果をコピー")
         copy_button.clicked.connect(self.copy_results_to_clipboard)
 
+        clear_button = QPushButton("結果をクリア")
+        clear_button.clicked.connect(self.clear_results)
+
         open_video_button = QPushButton("動画を開く")
         open_video_button.clicked.connect(self.open_selected_video)
 
         table_actions = QHBoxLayout()
         table_actions.addWidget(copy_button)
+        table_actions.addWidget(clear_button)
         table_actions.addWidget(open_video_button)
         table_actions.addStretch()
 
@@ -388,6 +396,14 @@ class MainWindow(QMainWindow):
 
         QApplication.clipboard().setText("\n".join(lines))
         self.statusBar().showMessage("解析結果をクリップボードにコピーしました")
+
+    def clear_results(self) -> None:
+        self.result_table.setRowCount(0)
+        self.known_files.clear()
+        self.selected_file_label.setText("未選択")
+        self.selected_status_label.setText("-")
+        self._update_counts()
+        self.statusBar().showMessage("解析結果をクリアしました")
 
     def _selected_row(self) -> int | None:
         selected_rows = self.result_table.selectionModel().selectedRows()
