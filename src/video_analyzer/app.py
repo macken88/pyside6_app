@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSlider,
     QSplitter,
     QStatusBar,
     QTableWidget,
@@ -42,12 +43,13 @@ RESULT_COLUMNS = [
 
 
 class VideoWindow(QMainWindow):
-    def __init__(self, video_path: Path, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+    def __init__(self, video_path: Path) -> None:
+        super().__init__()
         self.video_path = video_path
 
         self.setWindowTitle(f"Video Preview - {video_path.name}")
         self.resize(900, 600)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         self.player = QMediaPlayer(self)
         self.audio_output = QAudioOutput(self)
@@ -55,6 +57,8 @@ class VideoWindow(QMainWindow):
         self.player.setAudioOutput(self.audio_output)
         self.player.setVideoOutput(self.video_widget)
         self.player.setSource(QUrl.fromLocalFile(str(video_path)))
+        self.player.durationChanged.connect(self._update_duration)
+        self.player.positionChanged.connect(self._update_position)
 
         play_button = QPushButton("再生")
         play_button.clicked.connect(self.player.play)
@@ -64,6 +68,10 @@ class VideoWindow(QMainWindow):
 
         stop_button = QPushButton("停止")
         stop_button.clicked.connect(self.player.stop)
+
+        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider.setRange(0, 0)
+        self.position_slider.sliderMoved.connect(self.player.setPosition)
 
         path_label = QLabel(str(video_path))
         path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -76,12 +84,27 @@ class VideoWindow(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addWidget(self.video_widget, stretch=1)
+        layout.addWidget(self.position_slider)
         layout.addLayout(controls)
         layout.addWidget(path_label)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+    def _update_duration(self, duration: int) -> None:
+        self.position_slider.setRange(0, duration)
+
+    def _update_position(self, position: int) -> None:
+        if self.position_slider.isSliderDown():
+            return
+
+        self.position_slider.setValue(position)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.player.stop()
+        self.player.setSource(QUrl())
+        super().closeEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -93,7 +116,7 @@ class MainWindow(QMainWindow):
 
         self.watch_folder: Path | None = None
         self.known_files: dict[Path, float] = {}
-        self.video_windows: list[VideoWindow] = []
+        self.video_windows: dict[Path, VideoWindow] = {}
 
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(self._handle_directory_changed)
@@ -189,7 +212,7 @@ class MainWindow(QMainWindow):
         summary_box.setLayout(summary_form)
 
         guidance = QLabel(
-            "フォルダに動画が追加または更新されると、解析待ちの行として表に追加されます。"
+            "フォルダに動画が追加または更新されると、解析中の行として表に追加されます。"
             "解析値は後続実装用の仮置きです。"
         )
         guidance.setWordWrap(True)
@@ -268,7 +291,7 @@ class MainWindow(QMainWindow):
         else:
             row = existing_row
 
-        status = "解析待ち" if existing_row is None else "更新検出"
+        status = "解析中"
         values = [
             str(row + 1),
             datetime.fromtimestamp(modified_at).strftime("%Y-%m-%d %H:%M:%S"),
@@ -286,6 +309,8 @@ class MainWindow(QMainWindow):
             if column == 7:
                 item.setData(Qt.ItemDataRole.UserRole, str(video_path))
             self.result_table.setItem(row, column, item)
+
+        self._show_video_window(video_path)
 
     def _find_row_by_path(self, video_path: Path) -> int | None:
         target = str(video_path)
@@ -320,16 +345,27 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "動画が見つかりません", f"動画ファイルが存在しません:\n{video_path}")
             return
 
-        window = VideoWindow(video_path, self)
+        self._show_video_window(video_path)
+
+    def _show_video_window(self, video_path: Path) -> None:
+        existing_window = self.video_windows.get(video_path)
+        if existing_window is not None:
+            existing_window.show()
+            existing_window.raise_()
+            existing_window.activateWindow()
+            return
+
+        window = VideoWindow(video_path)
+        window.destroyed.connect(lambda _obj=None, path=video_path: self.video_windows.pop(path, None))
         window.show()
-        self.video_windows.append(window)
+        self.video_windows[video_path] = window
 
     def copy_results_to_clipboard(self) -> None:
         if self.result_table.rowCount() == 0:
             QMessageBox.information(self, "コピー対象なし", "コピーできる解析結果がありません。")
             return
 
-        lines = ["\t".join(RESULT_COLUMNS)]
+        lines = []
         for row in range(self.result_table.rowCount()):
             values = []
             for column in range(self.result_table.columnCount()):
