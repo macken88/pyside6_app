@@ -45,9 +45,9 @@ RESULT_COLUMNS = [
 class VideoWindow(QMainWindow):
     def __init__(self, video_path: Path) -> None:
         super().__init__()
-        self.video_path = video_path
+        self.video_path: Path | None = None
 
-        self.setWindowTitle(f"Video Preview - {video_path.name}")
+        self.setWindowTitle("Video Preview")
         self.resize(900, 600)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
@@ -56,7 +56,6 @@ class VideoWindow(QMainWindow):
         self.video_widget = QVideoWidget(self)
         self.player.setAudioOutput(self.audio_output)
         self.player.setVideoOutput(self.video_widget)
-        self.player.setSource(QUrl.fromLocalFile(str(video_path)))
         self.player.durationChanged.connect(self._update_duration)
         self.player.positionChanged.connect(self._update_position)
 
@@ -73,8 +72,8 @@ class VideoWindow(QMainWindow):
         self.position_slider.setRange(0, 0)
         self.position_slider.sliderMoved.connect(self.player.setPosition)
 
-        path_label = QLabel(str(video_path))
-        path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.path_label = QLabel()
+        self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         controls = QHBoxLayout()
         controls.addWidget(play_button)
@@ -86,11 +85,25 @@ class VideoWindow(QMainWindow):
         layout.addWidget(self.video_widget, stretch=1)
         layout.addWidget(self.position_slider)
         layout.addLayout(controls)
-        layout.addWidget(path_label)
+        layout.addWidget(self.path_label)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+        self.load_video(video_path)
+
+    def load_video(self, video_path: Path, *, auto_play: bool = True) -> None:
+        self.video_path = video_path
+        self.setWindowTitle(f"Video Preview - {video_path.name}")
+        self.path_label.setText(str(video_path))
+        self.position_slider.setValue(0)
+        self.position_slider.setRange(0, 0)
+        self.player.stop()
+        self.player.setSource(QUrl.fromLocalFile(str(video_path)))
+
+        if auto_play:
+            self.player.play()
 
     def _update_duration(self, duration: int) -> None:
         self.position_slider.setRange(0, duration)
@@ -116,7 +129,7 @@ class MainWindow(QMainWindow):
 
         self.watch_folder: Path | None = None
         self.known_files: dict[Path, float] = {}
-        self.video_windows: dict[Path, VideoWindow] = {}
+        self.video_window: VideoWindow | None = None
 
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(self._handle_directory_changed)
@@ -348,17 +361,17 @@ class MainWindow(QMainWindow):
         self._show_video_window(video_path)
 
     def _show_video_window(self, video_path: Path) -> None:
-        existing_window = self.video_windows.get(video_path)
-        if existing_window is not None:
-            existing_window.show()
-            existing_window.raise_()
-            existing_window.activateWindow()
+        if self.video_window is not None:
+            self.video_window.load_video(video_path)
+            self.video_window.show()
+            self.video_window.raise_()
+            self.video_window.activateWindow()
             return
 
         window = VideoWindow(video_path)
-        window.destroyed.connect(lambda _obj=None, path=video_path: self.video_windows.pop(path, None))
+        window.destroyed.connect(lambda _obj=None: setattr(self, "video_window", None))
         window.show()
-        self.video_windows[video_path] = window
+        self.video_window = window
 
     def copy_results_to_clipboard(self) -> None:
         if self.result_table.rowCount() == 0:
