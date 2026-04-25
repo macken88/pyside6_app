@@ -45,6 +45,205 @@ RESULT_COLUMNS = [
     "備考",
 ]
 
+APP_STYLE = """
+QMainWindow,
+QDialog {
+    background: #f6f8fb;
+    color: #172033;
+    font-family: "Segoe UI", "Yu Gothic UI", "Meiryo";
+    font-size: 10pt;
+}
+
+QMenuBar {
+    background: #ffffff;
+    border-bottom: 1px solid #dfe5ef;
+    padding: 4px 8px;
+}
+
+QMenuBar::item {
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+QMenuBar::item:selected {
+    background: #edf3ff;
+    color: #1d4ed8;
+}
+
+QMenu {
+    background: #ffffff;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+QMenu::item {
+    border-radius: 6px;
+    padding: 8px 28px 8px 12px;
+}
+
+QMenu::item:selected {
+    background: #edf3ff;
+    color: #1d4ed8;
+}
+
+QWidget#appHeader,
+QWidget#folderBar,
+QWidget#resultsPanel,
+QWidget#sidePanel,
+QWidget#videoPanel {
+    background: #ffffff;
+    border: 1px solid #dfe5ef;
+    border-radius: 8px;
+}
+
+QLabel#appTitle {
+    color: #111827;
+    font-size: 20pt;
+    font-weight: 700;
+}
+
+QLabel#appSubtitle,
+QLabel#guidanceLabel,
+QLabel#videoPathLabel {
+    color: #667085;
+}
+
+QLabel#sectionTitle {
+    color: #172033;
+    font-size: 13pt;
+    font-weight: 700;
+}
+
+QLineEdit {
+    background: #f9fbff;
+    border: 1px solid #cfd8e6;
+    border-radius: 8px;
+    color: #172033;
+    min-height: 34px;
+    padding: 0 12px;
+    selection-background-color: #bfdbfe;
+}
+
+QLineEdit:focus {
+    border: 1px solid #2563eb;
+    background: #ffffff;
+}
+
+QPushButton {
+    background: #ffffff;
+    border: 1px solid #cfd8e6;
+    border-radius: 8px;
+    color: #344054;
+    font-weight: 600;
+    min-height: 34px;
+    padding: 0 14px;
+}
+
+QPushButton:hover {
+    background: #f3f6fb;
+    border-color: #b8c4d6;
+}
+
+QPushButton:pressed {
+    background: #e8eef7;
+}
+
+QPushButton[variant="primary"] {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+QPushButton[variant="primary"]:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+QPushButton[variant="danger"] {
+    background: #ffffff;
+    border-color: #fecaca;
+    color: #b42318;
+}
+
+QPushButton[variant="danger"]:hover {
+    background: #fff1f2;
+    border-color: #fda4af;
+}
+
+QGroupBox {
+    background: #ffffff;
+    border: 1px solid #dfe5ef;
+    border-radius: 8px;
+    color: #172033;
+    font-weight: 700;
+    margin-top: 12px;
+    padding: 14px 12px 12px 12px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+}
+
+QTableWidget {
+    background: #ffffff;
+    alternate-background-color: #f8fafc;
+    border: 1px solid #dfe5ef;
+    border-radius: 8px;
+    gridline-color: #edf1f7;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
+}
+
+QTableWidget::item {
+    border-bottom: 1px solid #edf1f7;
+    padding: 8px;
+}
+
+QHeaderView::section {
+    background: #f1f5f9;
+    border: 0;
+    border-bottom: 1px solid #dfe5ef;
+    color: #475467;
+    font-weight: 700;
+    min-height: 36px;
+    padding: 8px;
+}
+
+QSplitter::handle {
+    background: transparent;
+    width: 10px;
+}
+
+QStatusBar {
+    background: #ffffff;
+    border-top: 1px solid #dfe5ef;
+    color: #667085;
+}
+
+QSlider::groove:horizontal {
+    background: #dfe5ef;
+    border-radius: 3px;
+    height: 6px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #2563eb;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    border-radius: 8px;
+    height: 14px;
+    margin: -5px 0;
+    width: 14px;
+}
+"""
+
 
 class VideoWindow(QMainWindow):
     def __init__(self, video_path: Path) -> None:
@@ -77,21 +276,26 @@ class VideoWindow(QMainWindow):
         self.position_slider.sliderMoved.connect(self.player.setPosition)
 
         self.path_label = QLabel()
+        self.path_label.setObjectName("videoPathLabel")
         self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         controls = QHBoxLayout()
+        controls.setSpacing(8)
         controls.addWidget(play_button)
         controls.addWidget(pause_button)
         controls.addWidget(stop_button)
         controls.addStretch()
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
         layout.addWidget(self.video_widget, stretch=1)
         layout.addWidget(self.position_slider)
         layout.addLayout(controls)
         layout.addWidget(self.path_label)
 
         container = QWidget()
+        container.setObjectName("videoPanel")
         container.setLayout(layout)
         self.setCentralWidget(container)
 
@@ -182,6 +386,21 @@ class MainWindow(QMainWindow):
         result_menu.addAction(self.open_video_action)
 
     def _build_ui(self) -> None:
+        app_title = QLabel("Video Analyzer")
+        app_title.setObjectName("appTitle")
+
+        app_subtitle = QLabel("監視フォルダに追加された動画を確認しながら、解析結果を表へ蓄積します。")
+        app_subtitle.setObjectName("appSubtitle")
+
+        header = QWidget()
+        header.setObjectName("appHeader")
+        header_layout = QVBoxLayout()
+        header_layout.setContentsMargins(18, 14, 18, 14)
+        header_layout.setSpacing(2)
+        header_layout.addWidget(app_title)
+        header_layout.addWidget(app_subtitle)
+        header.setLayout(header_layout)
+
         self.folder_path_input = QLineEdit()
         self.folder_path_input.setReadOnly(True)
         self.folder_path_input.setPlaceholderText("監視する動画フォルダを選択")
@@ -193,14 +412,20 @@ class MainWindow(QMainWindow):
         scan_button.clicked.connect(self.scan_watch_folder)
 
         self.toggle_watch_button = QPushButton("監視開始")
+        self.toggle_watch_button.setProperty("variant", "primary")
         self.toggle_watch_button.clicked.connect(self.toggle_monitoring)
 
+        folder_bar = QWidget()
+        folder_bar.setObjectName("folderBar")
         folder_row = QHBoxLayout()
+        folder_row.setContentsMargins(14, 12, 14, 12)
+        folder_row.setSpacing(10)
         folder_row.addWidget(QLabel("監視フォルダ"))
         folder_row.addWidget(self.folder_path_input, stretch=1)
         folder_row.addWidget(choose_button)
         folder_row.addWidget(self.toggle_watch_button)
         folder_row.addWidget(scan_button)
+        folder_bar.setLayout(folder_row)
 
         self.result_table = QTableWidget(0, len(RESULT_COLUMNS))
         self.result_table.setHorizontalHeaderLabels(RESULT_COLUMNS)
@@ -208,27 +433,36 @@ class MainWindow(QMainWindow):
         self.result_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.result_table.setAlternatingRowColors(True)
         self.result_table.setSortingEnabled(False)
+        self.result_table.setShowGrid(False)
         self.result_table.verticalHeader().setVisible(False)
         self.result_table.horizontalHeader().setStretchLastSection(True)
+        self.result_table.verticalHeader().setDefaultSectionSize(42)
 
         copy_button = QPushButton("結果をコピー")
         copy_button.clicked.connect(self.copy_results_to_clipboard)
 
         clear_button = QPushButton("結果をクリア")
+        clear_button.setProperty("variant", "danger")
         clear_button.clicked.connect(self.clear_results)
 
         open_video_button = QPushButton("動画を開く")
         open_video_button.clicked.connect(self.open_selected_video)
 
         table_actions = QHBoxLayout()
+        table_actions.setSpacing(8)
         table_actions.addWidget(copy_button)
         table_actions.addWidget(clear_button)
         table_actions.addWidget(open_video_button)
         table_actions.addStretch()
 
         results_panel = QWidget()
+        results_panel.setObjectName("resultsPanel")
         results_layout = QVBoxLayout()
-        results_layout.addWidget(QLabel("解析結果"))
+        results_layout.setContentsMargins(16, 16, 16, 16)
+        results_layout.setSpacing(12)
+        section_title = QLabel("解析結果")
+        section_title.setObjectName("sectionTitle")
+        results_layout.addWidget(section_title)
         results_layout.addLayout(table_actions)
         results_layout.addWidget(self.result_table, stretch=1)
         results_panel.setLayout(results_layout)
@@ -241,6 +475,9 @@ class MainWindow(QMainWindow):
 
         summary_box = QGroupBox("状態")
         summary_form = QFormLayout()
+        summary_form.setContentsMargins(6, 8, 6, 6)
+        summary_form.setHorizontalSpacing(12)
+        summary_form.setVerticalSpacing(10)
         summary_form.addRow("監視", self.watch_status_label)
         summary_form.addRow("検出数", self.detected_count_label)
         summary_form.addRow("選択動画", self.selected_file_label)
@@ -251,10 +488,14 @@ class MainWindow(QMainWindow):
             "フォルダに動画が追加または更新されると、解析中の行として表に追加されます。"
             "解析値は後続実装用の仮置きです。"
         )
+        guidance.setObjectName("guidanceLabel")
         guidance.setWordWrap(True)
 
         side_panel = QWidget()
+        side_panel.setObjectName("sidePanel")
         side_layout = QVBoxLayout()
+        side_layout.setContentsMargins(16, 16, 16, 16)
+        side_layout.setSpacing(14)
         side_layout.addWidget(summary_box)
         side_layout.addWidget(guidance)
         side_layout.addStretch()
@@ -268,7 +509,10 @@ class MainWindow(QMainWindow):
 
         root = QWidget()
         root_layout = QVBoxLayout()
-        root_layout.addLayout(folder_row)
+        root_layout.setContentsMargins(18, 18, 18, 18)
+        root_layout.setSpacing(14)
+        root_layout.addWidget(header)
+        root_layout.addWidget(folder_bar)
         root_layout.addWidget(splitter, stretch=1)
         root.setLayout(root_layout)
 
@@ -399,6 +643,7 @@ class MainWindow(QMainWindow):
             "-",
             "-",
             str(video_path),
+            "",
         ]
 
         for column, value in enumerate(values):
@@ -501,6 +746,8 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setStyleSheet(APP_STYLE)
     window = MainWindow()
     window.show()
     return app.exec()
