@@ -160,6 +160,28 @@ QPushButton[variant="primary"]:hover {
     border-color: #1d4ed8;
 }
 
+QPushButton[monitorState="stopped"] {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #ffffff;
+}
+
+QPushButton[monitorState="stopped"]:hover {
+    background: #15803d;
+    border-color: #15803d;
+}
+
+QPushButton[monitorState="running"] {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #111827;
+}
+
+QPushButton[monitorState="running"]:hover {
+    background: #d97706;
+    border-color: #d97706;
+}
+
 QPushButton[variant="danger"] {
     background: #ffffff;
     border-color: #fecaca;
@@ -206,6 +228,7 @@ QHeaderView::section {
     background: #f1f5f9;
     border: 0;
     border-bottom: 1px solid #dfe5ef;
+    border-right: 1px solid #c3cedd;
     color: #475467;
     font-weight: 700;
     min-height: 36px;
@@ -374,6 +397,9 @@ class MainWindow(QMainWindow):
         self.open_video_action = QAction("動画を別ウィンドウで開く", self)
         self.open_video_action.triggered.connect(self.open_selected_video)
 
+        self.help_action = QAction("ヘルプ", self)
+        self.help_action.triggered.connect(self.show_help)
+
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("ファイル")
         file_menu.addAction(self.choose_folder_action)
@@ -385,22 +411,10 @@ class MainWindow(QMainWindow):
         result_menu.addAction(self.clear_results_action)
         result_menu.addAction(self.open_video_action)
 
+        help_menu = self.menuBar().addMenu("ヘルプ")
+        help_menu.addAction(self.help_action)
+
     def _build_ui(self) -> None:
-        app_title = QLabel("Video Analyzer")
-        app_title.setObjectName("appTitle")
-
-        app_subtitle = QLabel("監視フォルダに追加された動画を確認しながら、解析結果を表へ蓄積します。")
-        app_subtitle.setObjectName("appSubtitle")
-
-        header = QWidget()
-        header.setObjectName("appHeader")
-        header_layout = QVBoxLayout()
-        header_layout.setContentsMargins(18, 14, 18, 14)
-        header_layout.setSpacing(2)
-        header_layout.addWidget(app_title)
-        header_layout.addWidget(app_subtitle)
-        header.setLayout(header_layout)
-
         self.folder_path_input = QLineEdit()
         self.folder_path_input.setReadOnly(True)
         self.folder_path_input.setPlaceholderText("監視する動画フォルダを選択")
@@ -412,7 +426,6 @@ class MainWindow(QMainWindow):
         scan_button.clicked.connect(self.scan_watch_folder)
 
         self.toggle_watch_button = QPushButton("監視開始")
-        self.toggle_watch_button.setProperty("variant", "primary")
         self.toggle_watch_button.clicked.connect(self.toggle_monitoring)
 
         folder_bar = QWidget()
@@ -423,7 +436,6 @@ class MainWindow(QMainWindow):
         folder_row.addWidget(QLabel("監視フォルダ"))
         folder_row.addWidget(self.folder_path_input, stretch=1)
         folder_row.addWidget(choose_button)
-        folder_row.addWidget(self.toggle_watch_button)
         folder_row.addWidget(scan_button)
         folder_bar.setLayout(folder_row)
 
@@ -450,10 +462,11 @@ class MainWindow(QMainWindow):
 
         table_actions = QHBoxLayout()
         table_actions.setSpacing(8)
+        table_actions.addWidget(self.toggle_watch_button)
         table_actions.addWidget(copy_button)
-        table_actions.addWidget(clear_button)
         table_actions.addWidget(open_video_button)
         table_actions.addStretch()
+        table_actions.addWidget(clear_button)
 
         results_panel = QWidget()
         results_panel.setObjectName("resultsPanel")
@@ -511,7 +524,6 @@ class MainWindow(QMainWindow):
         root_layout = QVBoxLayout()
         root_layout.setContentsMargins(18, 18, 18, 18)
         root_layout.setSpacing(14)
-        root_layout.addWidget(header)
         root_layout.addWidget(folder_bar)
         root_layout.addWidget(splitter, stretch=1)
         root.setLayout(root_layout)
@@ -597,11 +609,27 @@ class MainWindow(QMainWindow):
             self.watch_status_label.setText("監視中")
             self.toggle_watch_action.setText("監視停止")
             self.toggle_watch_button.setText("監視停止")
+            self._set_monitor_button_state("running")
             return
 
         self.watch_status_label.setText("停止中" if self.watch_folder else "未開始")
         self.toggle_watch_action.setText("監視開始")
         self.toggle_watch_button.setText("監視開始")
+        self._set_monitor_button_state("stopped")
+
+    def _set_monitor_button_state(self, state: str) -> None:
+        self.toggle_watch_button.setProperty("monitorState", state)
+        self.toggle_watch_button.style().unpolish(self.toggle_watch_button)
+        self.toggle_watch_button.style().polish(self.toggle_watch_button)
+        self.toggle_watch_button.update()
+
+    def show_help(self) -> None:
+        QMessageBox.information(
+            self,
+            "ヘルプ",
+            "ファイルメニューから監視フォルダを選択し、監視開始で動画の追加・更新を検出します。\n"
+            "解析結果は表に蓄積され、結果をコピーから表計算ソフトへ貼り付けできます。",
+        )
 
     def _restore_watch_folder(self) -> None:
         saved_folder = self.settings.value(SETTINGS_WATCH_FOLDER_KEY, "", str)
